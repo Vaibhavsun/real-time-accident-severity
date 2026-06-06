@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Accident Severity Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>Accident Severity • Real-Time</h1>
+    </div>
+    <div class="live-indicator">
+      <span id="ws-status" class="status offline">● disconnected</span>
+      <span class="last-update">Last update: <span id="last-update">—</span></span>
+    </div>
+  </header>
+
+  <main>
+    <!-- KPI tiles -->
+    <section class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Total Accidents</div><div class="kpi-value" id="kpi-accidents">—</div></div>
+      <div class="kpi fatal"><div class="kpi-label">Fatal</div><div class="kpi-value" id="kpi-fatal">—</div></div>
+      <div class="kpi serious"><div class="kpi-label">Serious</div><div class="kpi-value" id="kpi-serious">—</div></div>
+      <div class="kpi slight"><div class="kpi-label">Slight</div><div class="kpi-value" id="kpi-slight">—</div></div>
+      <div class="kpi"><div class="kpi-label">Casualties</div><div class="kpi-value" id="kpi-casualties">—</div></div>
+      <div class="kpi"><div class="kpi-label">Vehicles</div><div class="kpi-value" id="kpi-vehicles">—</div></div>
+    </section>
+
+    <!-- Top districts -->
+    <section class="row single">
+      <div class="card list-card">
+        <h2>Top Hotspot Districts</h2>
+        <ol id="top-districts" class="leaderboard"></ol>
+      </div>
+    </section>
+
+    <!-- Weather + Age bands -->
+    <section class="row">
+      <div class="card">
+        <h2>Accidents by Weather</h2>
+        <canvas id="chart-weather"></canvas>
+      </div>
+      <div class="card">
+        <h2>Drivers by Age Band</h2>
+        <canvas id="chart-age"></canvas>
+      </div>
+    </section>
+
+    <!-- ML Prediction -->
+    <section class="row">
+      <div class="card predict-card">
+        <h2>Predict Accident Severity <span class="hint" id="model-meta">(model loading…)</span></h2>
+        <form id="predict-form" class="predict-form">
+          <div class="field">
+            <label for="age_band">Age band of driver</label>
+            <select id="age_band" name="age_band_of_driver" required></select>
+          </div>
+          <div class="field">
+            <label for="sex">Sex of driver</label>
+            <select id="sex" name="sex_of_driver" required></select>
+          </div>
+          <div class="field">
+            <label for="vehicle_type">Vehicle type</label>
+            <select id="vehicle_type" name="vehicle_type" required></select>
+          </div>
+          <div class="field">
+            <button type="submit" id="predict-btn">Predict</button>
+          </div>
+        </form>
+        <div id="predict-result" class="predict-result"></div>
+      </div>
+    </section>
+
+    <!-- Latest tables -->
+    <section class="row">
+      <div class="card table-card">
+        <h2>Latest Aggregations <span class="hint">(most recent UPSERTs)</span></h2>
+        <div class="tabs">
+          <button class="tab active" data-tab="kpi-geo">KPI Geo</button>
+          <button class="tab" data-tab="conditions">Conditions</button>
+          <button class="tab" data-tab="hotspots">Hotspots</button>
+          <button class="tab" data-tab="vehicle">Vehicle Profile</button>
+          <button class="tab" data-tab="demographics">Demographics (Join)</button>
+        </div>
+        <div class="table-wrap">
+          <table id="latest-table">
+            <thead><tr id="latest-head"></tr></thead>
+            <tbody id="latest-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Powered by Glue Streaming · Event Hubs · Postgres · FastAPI + WebSocket</span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

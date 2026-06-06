@@ -1,0 +1,5 @@
+# Community-maintained fork of kafka-python (original is unmaintained since 2020).
+# 2.2.x adds enable_idempotence + max_in_flight_requests_per_connection support.
+# Drop-in compatible: `from kafka import KafkaProducer` still works.
+kafka-python-ng==2.2.3
+boto3>=1.34,<2.0

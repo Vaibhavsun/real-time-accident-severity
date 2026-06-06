@@ -1,0 +1,77 @@
+# Three-microservice local stack.
+# Each service is independently buildable and deployable (Docker = microservice per
+# the Data Engineering assignment definition).
+#
+# Service                Role
+# ─────────────────────────────────────────────────────────────────────────────
+# producer       │ Reads CSVs from S3, pushes to Event Hubs (Kafka surface)
+# ml-predict     │ Loads severity classifier from S3, serves /predict + /features
+# dashboard      │ Reads aggregations from Postgres, proxies /api/predict to ml-predict
+#
+# Usage:
+#   cp .env.example .env   # fill in your AWS / RDS / Event Hubs creds
+#   docker compose up -d
+#   open http://localhost:8000
+
+version: "3.8"
+
+services:
+  ml-predict:
+    build: ./ml_predict
+    image: accident-severity/ml-predict:latest
+    container_name: ml-predict
+    ports:
+      - "8001:8001"
+    environment:
+      S3_BUCKET: ${S3_BUCKET:-accident-severity-dev-data}
+      MODEL_KEY: ${MODEL_KEY:-models/severity_classifier.joblib}
+      MODEL_CACHE_TTL_SEC: ${MODEL_CACHE_TTL_SEC:-300}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request, json; r=urllib.request.urlopen('http://localhost:8001/health', timeout=3); print(json.load(r))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  dashboard:
+    build: ./dashboard
+    image: accident-severity/dashboard:latest
+    container_name: dashboard
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-dashboard}
+      DB_USER: ${DB_USER:-dashboard_admin}
+      DB_PASS: ${DB_PASS}
+      ML_PREDICT_URL: http://ml-predict:8001
+    depends_on:
+      - ml-predict
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/stats', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  producer:
+    build: ./producer
+    image: accident-severity/producer:latest
+    container_name: producer
+    environment:
+      KAFKA_BROKERS: ${KAFKA_BROKERS}
+      KAFKA_SASL_USERNAME: ${KAFKA_SASL_USERNAME:-$$ConnectionString}
+      KAFKA_SASL_PASSWORD: ${KAFKA_SASL_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET:-accident-severity-dev-data}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      RATE: ${PRODUCER_RATE:-100}
+      MAX_RECORDS: ${PRODUCER_MAX_RECORDS:-0}
+    restart: unless-stopped

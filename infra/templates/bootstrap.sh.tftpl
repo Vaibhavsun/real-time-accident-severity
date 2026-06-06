@@ -1,0 +1,117 @@
+#!/bin/bash
+set -euxo pipefail
+exec > >(tee /var/log/bootstrap.log) 2>&1
+
+# -----------------------------------------------------------------------------
+# 1. OS packages: Python, Docker, AWS CLI v2
+# -----------------------------------------------------------------------------
+yum update -y
+amazon-linux-extras install -y docker python3.8
+yum install -y git unzip
+systemctl enable docker
+systemctl start docker
+usermod -aG docker ec2-user
+
+# AWS CLI v2 (Amazon Linux 2 ships v1 which is too old for some commands)
+curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install --update
+rm -rf /tmp/aws /tmp/awscliv2.zip
+
+# Python deps for the producer
+pip3 install --quiet kafka-python boto3
+
+# -----------------------------------------------------------------------------
+# 2. Event Hubs env vars (system-wide via /etc/profile.d + an env file for systemd)
+# -----------------------------------------------------------------------------
+cat > /etc/eventhubs.env <<'ENVFILE'
+S3_BUCKET=${bucket}
+AWS_REGION=${aws_region}
+KAFKA_BROKERS=${eh_bootstrap}
+KAFKA_SASL_USERNAME=$ConnectionString
+KAFKA_SASL_PASSWORD=${eh_conn_str}
+RATE=${producer_rate}
+MAX_RECORDS=${producer_max_records}
+ENVFILE
+chmod 600 /etc/eventhubs.env
+
+cat > /etc/profile.d/eventhubs.sh <<'PROFILE'
+set -a
+[ -r /etc/eventhubs.env ] && . /etc/eventhubs.env
+set +a
+PROFILE
+chmod 644 /etc/profile.d/eventhubs.sh
+
+# -----------------------------------------------------------------------------
+# 3. Producer landing dir + systemd unit (code will be scp'd in after boot)
+# -----------------------------------------------------------------------------
+mkdir -p /opt/producer
+chown -R ec2-user:ec2-user /opt/producer
+
+cat > /etc/systemd/system/producer.service <<'UNIT'
+[Unit]
+Description=Accident-severity S3 -> Azure Event Hubs producer
+After=network-online.target docker.service
+Wants=network-online.target
+ConditionPathExists=/opt/producer/producer.py
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/opt/producer
+EnvironmentFile=/etc/eventhubs.env
+ExecStart=/usr/bin/python3 /opt/producer/producer.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable producer.service
+# NOT started here — start it after you scp producer.py into /opt/producer/
+
+# -----------------------------------------------------------------------------
+# 4. Kafka UI (Kafdrop) in Docker, wired to the Azure Event Hubs Kafka surface
+# -----------------------------------------------------------------------------
+# Kafdrop expects SASL config as a base64-encoded properties file passed
+# through the KAFKA_PROPERTIES env var. The literal `\$ConnectionString` is
+# what Event Hubs wants as the SASL username (escape the $ from heredoc).
+mkdir -p /opt/kafdrop
+cat > /opt/kafdrop/kafka.properties <<KAFKAPROPS
+security.protocol=SASL_SSL
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="\$ConnectionString" password="${eh_conn_str}";
+KAFKAPROPS
+chmod 600 /opt/kafdrop/kafka.properties
+KAFKA_PROPS_B64=$(base64 -w 0 /opt/kafdrop/kafka.properties)
+
+docker run -d \
+  --name kafdrop \
+  --restart always \
+  -p 8080:9000 \
+  -e KAFKA_BROKERCONNECT=${eh_bootstrap} \
+  -e KAFKA_PROPERTIES="$KAFKA_PROPS_B64" \
+  -e JVM_OPTS="-Xms64M -Xmx256M" \
+  obsidiandynamics/kafdrop:latest
+
+# -----------------------------------------------------------------------------
+# 6. MOTD with useful commands
+# -----------------------------------------------------------------------------
+cat > /etc/motd <<'MOTD'
+
+=== Real-Time Accident Severity producer EC2 =================================
+  Kafka UI (Provectus)   http://<this-ec2-public-ip>:8080
+  Event Hubs env         cat /etc/eventhubs.env
+  Bootstrap log          tail -f /var/log/bootstrap.log
+
+  Producer:
+    1. scp producer.py to /opt/producer/  (done from your laptop)
+    2. sudo systemctl start producer
+    3. sudo journalctl -u producer -f     # follow logs
+=============================================================================
+
+MOTD

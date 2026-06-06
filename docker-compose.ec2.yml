@@ -1,0 +1,61 @@
+# EC2-side Docker stack — runs on the producer EC2 instance.
+# All 3 services containerized (Python 3.11 base) — systemd producer
+# is disabled by setup.sh and replaced by the container below.
+#
+# Deployed by setup.sh after `terraform apply`:
+#   1. rsync dashboard/, ml_predict/, docker-compose.ec2.yml to EC2
+#   2. ssh to EC2 → install docker → `docker compose -f docker-compose.ec2.yml up -d`
+#
+# URLs after deploy:
+#   http://<ec2_public_ip>:8000   ← dashboard
+#   http://<ec2_public_ip>:8001   ← ml-predict
+version: "3.8"
+
+services:
+  ml-predict:
+    build: ./ml_predict
+    image: accident-severity/ml-predict:latest
+    container_name: ml-predict
+    ports:
+      - "8001:8001"
+    environment:
+      S3_BUCKET: ${S3_BUCKET}
+      MODEL_KEY: ${MODEL_KEY:-models/severity_classifier.joblib}
+      MODEL_CACHE_TTL_SEC: ${MODEL_CACHE_TTL_SEC:-300}
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    restart: unless-stopped
+
+  dashboard:
+    build: ./dashboard
+    image: accident-severity/dashboard:latest
+    container_name: dashboard
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-dashboard}
+      DB_USER: ${DB_USER:-dashboard_admin}
+      DB_PASS: ${DB_PASS}
+      ML_PREDICT_URL: http://ml-predict:8001
+    depends_on:
+      - ml-predict
+    restart: unless-stopped
+
+  producer:
+    build: ./producer
+    image: accident-severity/producer:latest
+    container_name: producer
+    environment:
+      KAFKA_BROKERS: ${KAFKA_BROKERS}
+      KAFKA_SASL_USERNAME: ${KAFKA_SASL_USERNAME:-$$ConnectionString}
+      KAFKA_SASL_PASSWORD: ${KAFKA_SASL_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      RATE: ${PRODUCER_RATE:-100}
+      MAX_RECORDS: ${PRODUCER_MAX_RECORDS:-0}
+    restart: unless-stopped

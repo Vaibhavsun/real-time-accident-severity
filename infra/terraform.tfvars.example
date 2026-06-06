@@ -1,0 +1,23 @@
+aws_region    = "us-east-1"
+project_name  = "accident-severity"
+environment   = "dev"
+
+vpc_cidr  = "10.0.0.0/16"
+az_count  = 2
+
+ssh_allowed_cidrs = ["0.0.0.0/0"]
+
+# Azure (for Event Hubs / Kafka surface)
+azure_subscription_id = "00000000-0000-0000-0000-000000000000"
+azure_location        = "eastus"
+
+# RDS Postgres (dashboard sink). Set rds_password before apply.
+rds_password            = "change-me-strong-password"
+rds_db_name             = "dashboard"
+rds_username            = "dashboard_admin"
+rds_instance_class      = "db.t3.micro"
+# rds_extra_ingress_cidrs = ["1.2.3.4/32"]   # your laptop, for psql access
+
+# Glue Streaming sizing (2 workers/job is the cheapest)
+glue_worker_type       = "G.1X"
+glue_number_of_workers = 2

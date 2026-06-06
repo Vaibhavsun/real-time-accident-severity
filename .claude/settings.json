@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i infra/producer-key.pem ec2-user@44.200.32.144 'docker ps --format \"table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\" && echo \"\" && echo \"=== last 15 lines of kafdrop logs ===\" && docker logs --tail 15 kafdrop 2>&1')",
+      "Bash(curl -sS http://44.200.32.144:8080/)",
+      "Bash(python3 -c \"import sys, json; data=json.load\\(sys.stdin\\); [print\\(f' {t[\\\\\"name\\\\\"]}: partitions={len\\(t[\\\\\"partitions\\\\\"]\\)}'\\) for t in data]\")",
+      "Bash(curl -sS \"http://44.200.32.144:8080/topic/accident-raw/messages?partition=0&offset=0&count=1&format=DEFAULT&isAnyProto=false\")",
+      "Bash(grep -oE '\"message\":\"[^\"]{0,200}')",
+      "Bash(curl -sS \"http://44.200.32.144:8080/topic/accident-raw/messages?partition=0&offset=0&count=1\" -H \"Accept: application/json\")",
+      "Bash(curl -sS -H \"Accept: application/json\" \"http://44.200.32.144:8080/topic/accident-raw/messages?partition=0&offset=0&count=3\")",
+      "Bash(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i infra/producer-key.pem ec2-user@44.200.32.144 'set -a; sudo cat /etc/eventhubs.env | sudo tee /tmp/eh.env > /dev/null; source /tmp/eh.env; set +a; python3 -c \" *)",
+      "Bash(az monitor *)",
+      "Bash(scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i infra/producer-key.pem /tmp/eh_consumer_test.py ec2-user@44.200.32.144:/tmp/eh_consumer_test.py)",
+      "Bash(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i infra/producer-key.pem ec2-user@44.200.32.144 'set -a; sudo cat /etc/eventhubs.env | sudo tee /tmp/eh.env > /dev/null; source /tmp/eh.env; set +a; python3 /tmp/eh_consumer_test.py')",
+      "Bash(scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i infra/producer-key.pem /tmp/eh_consumer_test2.py ec2-user@44.200.32.144:/tmp/)",
+      "Bash(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i infra/producer-key.pem ec2-user@44.200.32.144 'set -a; sudo cat /etc/eventhubs.env | sudo tee /tmp/eh.env > /dev/null; source /tmp/eh.env; set +a; python3 /tmp/eh_consumer_test2.py')",
+      "Bash(scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i infra/producer-key.pem /tmp/eh_amqp_read.py ec2-user@44.200.32.144:/tmp/)",
+      "Bash(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i infra/producer-key.pem ec2-user@44.200.32.144 'pip3 install --quiet azure-eventhub 2>&1 | tail -3; set -a; sudo cat /etc/eventhubs.env | sudo tee /tmp/eh.env > /dev/null; source /tmp/eh.env; set +a; python3 /tmp/eh_amqp_read.py')",
+      "Bash(curl -sS \"http://44.200.32.144:8080/topic/accident-raw/messages?partition=0&offset=0&count=2&format=DEFAULT&keyFormat=DEFAULT&isAnyProto=false\" -H \"Accept: text/html\")",
+      "Bash(curl -sS \"http://44.200.32.144:8080/topic/accident-raw/messages?partition=0&offset=0&count=1&format=DEFAULT&keyFormat=DEFAULT&isAnyProto=false\" -H \"Accept: application/json\")",
+      "Bash(curl -sS \"http://44.200.32.144:8080/topic/accident-raw/messages?partition=0&offset=0&count=2&format=DEFAULT&keyFormat=DEFAULT&isAnyProto=false\")",
+      "Bash(curl -sS \"http://44.200.32.144:8080/topic/accident-raw/messages?partition=0&offset=5000&count=2&format=DEFAULT&keyFormat=DEFAULT&isAnyProto=false\")",
+      "Bash(curl -sS \"http://44.200.32.144:8080/topic/accident-raw/allmessages?partition=0&count=2\")"
+    ]
+  }
+}
