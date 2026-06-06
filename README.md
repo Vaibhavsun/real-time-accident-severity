@@ -1,4 +1,4 @@
-# Real-Time Accident Severity — Data Engineering Portfolio (Task 2)
+# Real-Time Accident Severity — Data Engineering
 
 **Course:** Data Engineering (DLMDSEDE02) — IU Internationale Hochschule
 **Task:** Build a real-time data backend for a data-intensive application
