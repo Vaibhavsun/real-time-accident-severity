@@ -171,8 +171,6 @@ FastAPI service on port 8000. Serves:
 - `POST /api/predict` + `GET /api/predict/features` — reverse-proxy to `ml-predict:8001`
 - `WS /ws` — WebSocket broadcaster: every 10 seconds a background coroutine builds a snapshot query (stats, recent geo, top districts, top weather, age bands) and pushes it as JSON to all connected clients
 
-**Live map** (`/static/app.js`): Leaflet.js heatmap over the UK showing accident geo-grid cells as circles. Circle radius scales with accident count (`√count × 3`, min 7 px). Color encodes the worst severity in that cell — red (fatal), orange (serious), green (slight). Circles have a visible dark border, `fillOpacity: 0.82`, and highlight on hover. A legend is rendered bottom-right. Clicking a circle opens a popup with the full Fatal / Serious / Slight breakdown.
-
 The dashboard is the only microservice exposed to end users; ml-predict is accessed only over the internal Docker network (`http://ml-predict:8001`).
 
 ---
@@ -184,9 +182,27 @@ The dashboard is the only microservice exposed to end users; ml-predict is acces
 | File | Rows | Time reference |
 |------|------|----------------|
 | `Accident_Information.csv` | ~2,047,256 | `Date` (YYYY-MM-DD) + `Time` (HH:MM) columns |
-| `Vehicle_Information.csv` | ~2,177,205 | Joined via `Accident_Index` to accident timestamp |
+| `Vehicle_Information.csv` | ~2,058,408 | Joined via `Accident_Index` to accident timestamp (pre-2005 records removed) |
 
 Both files far exceed the 1,000,000-data-point requirement.
+
+**Download & prepare data:**
+
+CSV files are excluded from git (too large). Use the provided script to download from Kaggle, sort by `Accident_Index`, and filter pre-2005 vehicle records:
+
+```bash
+# Install Kaggle CLI
+pip install kaggle
+
+# Set credentials (get from kaggle.com → Account → Settings → API)
+export KAGGLE_USERNAME=your_username
+export KAGGLE_KEY=your_api_key
+
+# Download + prepare
+bash download_data.sh
+```
+
+This script downloads, sorts both CSVs by `Accident_Index`, and removes 118,797 pre-2005 records from the vehicle file — ensuring both streams produce matching `Accident_Index` values from the start of replay.
 
 **Real-time simulation:** The CSVs are static, so the producer replays them as a continuous event stream at a configurable rate (default 100 msg/s per stream, ~200 msg/s total). Each row is enriched with `ingest_time` (wall-clock UTC) before being pushed to Kafka. The Spark jobs read `startingOffsets=latest` and process the live stream — from Spark's perspective this is indistinguishable from a genuine IoT sensor feed. `MAX_RECORDS=0` (default) streams the entire dataset; setting it to a small number (e.g. 5000) enables a quick smoke-test run.
 
@@ -333,7 +349,13 @@ Outputs include `eventhub_connection_string`, `rds_endpoint`, `ec2_public_ip` �
 Requirements: Docker Desktop, AWS credentials with S3 read access.
 
 ```bash
+# 1. Download and prepare data
+bash download_data.sh
+
+# 2. Configure environment
 cp .env.example .env          # fill in AWS creds, DB_HOST, DB_PASS, KAFKA_* values
+
+# 3. Start services
 docker compose up -d
 open http://localhost:8000    # dashboard
 # POST http://localhost:8001/predict for direct ML inference
